@@ -17,8 +17,10 @@ class Model : public DisplayList::Node
 		IDirect3DVertexDeclaration9* m_pVertexDeclaration;
 		IDirect3DIndexBuffer9* m_pIndexBuffer;
 
-		IDirect3DVertexShader9* m_pVertexShader;
-		IDirect3DPixelShader9* m_pPixelShader;
+		ID3DXEffect* m_pEffect;
+		int m_VertexSize;
+		int m_VertexCount;
+		int m_TriangleCount;
 	};
 
 	std::vector<Mesh> m_Meshes;

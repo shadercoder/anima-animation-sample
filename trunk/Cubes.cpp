@@ -160,8 +160,9 @@ HRESULT AnimaApplication::CreateInstance( HINSTANCE hInstance, HINSTANCE hPrevIn
 	// set up renderer 
 
 	
-	Model* m = new Model( "C:\\Users\\Theo\\Desktop\\cubes.dae" );
-	m->load( Instance()->m_pRenderContext );
+	Instance()->m_Model = new Model( "C:\\Users\\Theo\\Desktop\\cubes.dae" );
+	Instance()->m_Model->load( Instance()->m_pRenderContext );
+	Instance()->m_Model->SetNext( Instance()->m_pCubeRenderer );
 	return S_OK;
 }
 
@@ -203,7 +204,7 @@ void AnimaApplication::NextFrame()
 	m_pCamera->update( m_DeltaTime.Elapsed() );
 	m_pCubeRenderer->Update( m_DeltaTime.Elapsed() );
 	m_pRenderContext->SetViewMatrix( m_pCamera->ViewMatrix() );
-	m_pRenderContext->RenderFrame( m_pCubeRenderer );
+	m_pRenderContext->RenderFrame( m_Model );
 
 	m_pFramerateCounter->FrameEnd();
 	

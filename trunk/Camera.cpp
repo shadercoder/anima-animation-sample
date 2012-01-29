@@ -3,7 +3,7 @@
 #include <iostream>
 
 #define KEY_DOWN 0x8000 
-#define MOVEMENT_SPEED 0.0001f
+#define MOVEMENT_SPEED 0.5f
 #define ROTATION_SPEED 0.250f
 
 Camera::Camera( const Input& input )
@@ -73,8 +73,8 @@ void Camera::update( float dt )
 
 	Math::Vector left = forward.Cross( up );
 
-	Math::Vector s = left.Scale( _left ? 1.0f : ( _right ? -1.0f : 0.0f ) );
-	Math::Vector f = forward.Scale( _up ? 1.0f : ( _down ? -1.0f : 0.0f ) );
+	Math::Vector s = left.Scale( _left ? 1.0f : ( _right ? -1.0f : 0.0f ) ).Scale( dt * MOVEMENT_SPEED );
+	Math::Vector f = forward.Scale( _up ? 1.0f : ( _down ? -1.0f : 0.0f ) ).Scale( dt * MOVEMENT_SPEED );
 	
 	m_Position += s + f;
 	
