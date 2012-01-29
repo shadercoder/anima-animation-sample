@@ -8,6 +8,8 @@ class RenderContext;
 class FramerateCounter;
 class CubeRendererInterface;
 class UserInterface;
+class Camera;
+class Input;
 
 /*	The main application class (Singleton)
 		Owns instances of all other classes, creates the application window and handles keyboad input				*/
@@ -20,6 +22,8 @@ class AnimaApplication
 	FramerateCounter* m_pFramerateCounter;
 	UserInterface* m_pUserInterface;
 	TestEnvironment* m_pTestEnvironment;
+	Camera* m_pCamera;
+	Input* m_pInput;
 
 	WNDCLASSEX m_WindowClass;
 	HWND m_WindowHandle;
@@ -28,7 +32,37 @@ class AnimaApplication
 	AnimaApplication( WNDCLASSEX windowClass, HWND windowHandle ) : m_WindowClass( windowClass ), m_WindowHandle( windowHandle ){}
 	static AnimaApplication* m_pInstance;
 
-	float m_DeltaTime;
+	CubeRendererInterface* m_pCubeRenderer;
+
+	class DeltaTime 
+	{
+		LARGE_INTEGER TicksPerSecond;
+		LARGE_INTEGER LastTick;
+
+		float DeltaMS;
+	public:
+		DeltaTime()
+		{
+			QueryPerformanceFrequency( &TicksPerSecond );
+			QueryPerformanceCounter( &LastTick );
+			DeltaMS = 0.f;
+		}
+
+		void Update()
+		{
+			LARGE_INTEGER curTick;
+			QueryPerformanceCounter( &curTick );
+
+			DeltaMS = float(double(curTick.QuadPart - LastTick.QuadPart)/TicksPerSecond.QuadPart);
+		}
+
+		float Elapsed()
+		{
+			return DeltaMS / 1000.0f;
+		}
+	} m_DeltaTime;
+
+	
 
 public: 
 	~AnimaApplication();

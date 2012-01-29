@@ -3,6 +3,7 @@
 #include <mmsystem.h>
 
 #include "resource.h"
+#include "Camera.h"
 
 #include "Cubes.h"
 #include "RenderContext.h"
@@ -11,8 +12,18 @@
 #include <assert.h>
 #include <Shellapi.h>
 #include "TestEnvironment.h"
+#include "Model.h"
+#include "CubeRenderer0.h"
+#include "Input.h"
 
 
+#ifndef HID_USAGE_PAGE_GENERIC
+	#define HID_USAGE_PAGE_GENERIC         ((USHORT) 0x01)
+#endif
+
+#ifndef HID_USAGE_GENERIC_MOUSE
+	#define HID_USAGE_GENERIC_MOUSE        ((USHORT) 0x02)
+#endif
 
 //-----------------------------------------------------------------------------
 // PROTOTYPES
@@ -87,8 +98,6 @@ HRESULT AnimaApplication::CreateInstance( HINSTANCE hInstance, HINSTANCE hPrevIn
 	WNDCLASSEX winClass;
 	memset( &winClass, 0x0, sizeof(WNDCLASSEX) );
 	
-#ifndef OPENGL
-
 	winClass.lpszClassName = "MY_WINDOWS_CLASS";
 	winClass.cbSize        = sizeof(WNDCLASSEX);
 	winClass.style         = CS_HREDRAW | CS_VREDRAW;
@@ -113,30 +122,17 @@ HRESULT AnimaApplication::CreateInstance( HINSTANCE hInstance, HINSTANCE hPrevIn
 	if( hWnd == NULL )
 		return E_FAIL;
 
+	// register raw input device
+	RAWINPUTDEVICE Rid[1];
+    Rid[0].usUsagePage = HID_USAGE_PAGE_GENERIC; 
+    Rid[0].usUsage = HID_USAGE_GENERIC_MOUSE; 
+    Rid[0].dwFlags = RIDEV_INPUTSINK;   
+    Rid[0].hwndTarget = hWnd;
+    RegisterRawInputDevices( Rid, 1, sizeof(Rid[0]) );
+
+
 	ShowWindow( hWnd, nCmdShow );
     UpdateWindow( hWnd );
-#else
-
-	// very hacky way to do this but i didn't want to invest more time in such an unimportant task
-	char* argv[] =
-	{
-		GetCommandLine(),
-		NULL
-	};
-
-	int argc = 1;
-
-    glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_RGB | GLUT_DEPTH | GLUT_DOUBLE);
-    glutInitWindowSize(1024, 768);
-    hWnd = (HWND)glutCreateWindow("OpenGL DX9 Smiling Cubes");
-
-	glutDisplayFunc(GLUT_OnRenderFrame);
-	glutKeyboardUpFunc(GLUT_OnKeyUp);
-  
-	// register vbo extension functions; 
-	initVBO();
-#endif
 
 	LPWSTR *szArglist;
 	int nArgs;
@@ -150,47 +146,22 @@ HRESULT AnimaApplication::CreateInstance( HINSTANCE hInstance, HINSTANCE hPrevIn
 	Instance()->m_pTestEnvironment = testEnvironment;
 	Instance()->m_pRenderContext = new RenderContext( hWnd, DISPLAY_WIDTH, DISPLAY_HEIGHT );
 	Instance()->m_pFramerateCounter = new FramerateCounter;
-	/*
-	switch( Instance()->m_pTestEnvironment->GetRendererVersion() )
-	{
-	case 0: 
-		Instance()->m_pCubeRenderer = new CubeRenderer0( m_pInstance->m_pRenderContext );
-		break;
-	case 1:
-		Instance()->m_pCubeRenderer = new CubeRenderer1( m_pInstance->m_pRenderContext );
-		break;
-	case 2:
-		Instance()->m_pCubeRenderer = new CubeRenderer2( m_pInstance->m_pRenderContext );
-		break;
-	case 3:
-		Instance()->m_pCubeRenderer = new CubeRenderer3( m_pInstance->m_pRenderContext );
-		break;
-	case 4:
-		Instance()->m_pCubeRenderer = new CubeRenderer4( m_pInstance->m_pRenderContext );
-		break;
-	case 5:
-		Instance()->m_pCubeRenderer = new CubeRenderer5( m_pInstance->m_pRenderContext );
-		break;
-	case 6:
-		Instance()->m_pCubeRenderer = new CubeRenderer6( m_pInstance->m_pRenderContext );
-		break;
 
-	}
-
+	Instance()->m_pCubeRenderer = new CubeRenderer0( m_pInstance->m_pRenderContext );
 	Instance()->m_pCubeRenderer->AcquireResources( Instance()->m_pRenderContext );
-	
+	Instance()->m_pCubeRenderer->AddCubes( 10000 );
 
 	Instance()->m_pUserInterface = new UserInterface( m_pInstance->m_pRenderContext, m_pInstance->m_pCubeRenderer, m_pInstance->m_pFramerateCounter );
 	Instance()->m_pUserInterface->AcquireResources( Instance()->m_pRenderContext );
 
 	Instance()->m_pCubeRenderer->SetNext( m_pInstance->m_pUserInterface );
-*/
+	Instance()->m_pInput = new Input();
+	Instance()->m_pCamera = new Camera( *Instance()->m_pInput );
 	// set up renderer 
-	Instance()->m_DeltaTime = 0;
-
 
 	
-
+	Model* m = new Model( "C:\\Users\\Theo\\Desktop\\cubes.dae" );
+	m->load( Instance()->m_pRenderContext );
 	return S_OK;
 }
 
@@ -204,7 +175,6 @@ void AnimaApplication::DestroyInstance()
 
 void AnimaApplication::Run()
 {
-#ifndef OPENGL
 	MSG        uMsg;
     memset(&uMsg,0,sizeof(uMsg));
 
@@ -220,20 +190,23 @@ void AnimaApplication::Run()
 			NextFrame(); 
 		}
 	}
-#else
-	glutMainLoop();
-#endif
 }
 
 void AnimaApplication::NextFrame()
 {
+	m_DeltaTime.Update();
+
+	m_pInput->Update( m_DeltaTime.Elapsed() );
+
 	m_pFramerateCounter->FrameStart();
 
-//	m_pCubeRenderer->Update( m_DeltaTime );
-	m_pRenderContext->RenderFrame( NULL );
+	m_pCamera->update( m_DeltaTime.Elapsed() );
+	m_pCubeRenderer->Update( m_DeltaTime.Elapsed() );
+	m_pRenderContext->SetViewMatrix( m_pCamera->ViewMatrix() );
+	m_pRenderContext->RenderFrame( m_pCubeRenderer );
 
 	m_pFramerateCounter->FrameEnd();
-	m_DeltaTime = m_pFramerateCounter->GetDelta();
+	
 //	Sleep(10);
 }
 
@@ -241,6 +214,7 @@ LRESULT AnimaApplication::OnMessage( HWND hWnd, UINT msg, WPARAM wParam, LPARAM 
 {
 	switch( msg )
 	{	
+
         case WM_KEYDOWN:
 		{
 			switch( wParam )
@@ -249,7 +223,8 @@ LRESULT AnimaApplication::OnMessage( HWND hWnd, UINT msg, WPARAM wParam, LPARAM 
 				case 0x51: // 'Q'
 					PostQuitMessage(0);
 					break;
-/*
+
+					/*
 				case VK_LEFT:
 					if( !m_pTestEnvironment->IsValid() )
 						m_pCubeRenderer->RemoveCubes( 1000 );
@@ -280,10 +255,17 @@ LRESULT AnimaApplication::OnMessage( HWND hWnd, UINT msg, WPARAM wParam, LPARAM 
 		}
         break;
 
+		case WM_INPUT:
+		{
+			m_pInput->OnRawInput( (HRAWINPUT)lParam );
+		}
+		break;
+
 		case WM_CLOSE:
 		{
 			PostQuitMessage(0);	
 		}
+		break;
 		
         case WM_DESTROY:
 		{
