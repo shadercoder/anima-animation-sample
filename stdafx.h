@@ -22,23 +22,14 @@
 #include <d3d9.h>
 #include <d3dx9.h>
 
-#ifdef OPENGL
-#include <external/include/GL/glut.h>
-#include <Cg/cg.h>
-#include <Cg/cgGL.h>
+// STL
+#include <vector>
+#include <set>
+#include <map>
+#include <algorithm>
+#include <numeric>
 
-//#define GL_GLEXT_PROTOTYPES
-#include <GL/glext.h>
-
-#define glGenBuffersARB           pglGenBuffersARB
-#define glBindBufferARB           pglBindBufferARB
-#define glBufferDataARB           pglBufferDataARB
-#define glBufferSubDataARB        pglBufferSubDataARB
-#define glDeleteBuffersARB        pglDeleteBuffersARB
-#define glGetBufferParameterivARB pglGetBufferParameterivARB
-#define glMapBufferARB            pglMapBufferARB
-#define glUnmapBufferARB          pglUnmapBufferARB
-
-void initVBO();
-
-#endif
+// assimp
+#include <assimp.hpp> 
+#include <aiScene.h>  
+#include <aiPostProcess.h>

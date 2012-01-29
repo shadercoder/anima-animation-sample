@@ -45,9 +45,23 @@ namespace Math
 			return Vector( GetX() + other.GetX(), GetY() + other.GetY(), GetZ() + other.GetZ() );
 		}
 
+		Vector operator+=( const Vector& other ) 
+		{
+			*this = *this + other;
+			return *this;
+		}
+
 		Vector Scale( const float scale ) const
 		{
 			return Vector( GetX() * scale, GetY() * scale, GetZ() * scale );
+		}
+
+		Vector Cross( const Vector& other ) const
+		{
+			Vector result;
+			D3DXVec3Cross( &result.data, &data, &other.data );
+			return result;
+			
 		}
 	};
 
@@ -141,6 +155,7 @@ namespace Math
 	D3DXVECTOR4 Min( D3DXVECTOR4 a, D3DXVECTOR4 b );
 	D3DXVECTOR4 Max( D3DXVECTOR4 a, D3DXVECTOR4 b );
 
+	const float Pi = 3.14159265f;
 
 }
 #endif
