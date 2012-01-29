@@ -377,7 +377,7 @@ void CubeRenderer0:: Update( float dt )
 
 void CubeRenderer0::Render( RenderContext* context )
 {
-
+	return;
 	context->Device()->SetVertexDeclaration( m_pVertexDeclaration );
 	context->Device()->SetStreamSource( 0, m_pVertexBuffer, 0, VERTEX_SIZE );
 	context->Device()->SetIndices( m_pIndexBuffer );
