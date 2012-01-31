@@ -16,12 +16,13 @@ Skeleton::~Skeleton(void)
 {
 }
 
-void Skeleton::addTransform( int parent, const aiMatrix4x4& transform, const std::string& name )
+void Skeleton::addTransform( int parent, const aiMatrix4x4& transform, const aiMatrix4x4& bindingTransform, const std::string& name )
 {
 	assert( mTransforms.size() == mParents.size() );
 	assert( parent < static_cast<int>( mTransforms.size() ) && parent >= -1 );
 
 	mTransforms.push_back( transform );
+	mBindingTransforms.push_back( bindingTransform );
 	mParents.push_back( parent );
 	mNodeNames.push_back( name );
 }
@@ -68,7 +69,7 @@ int Skeleton::getBoneCount() const
 	return mParents.size();
 }
 
-void SkeletonFactory::findAnimatedNodes( const aiScene* scene, set<string>& result )
+void SkeletonFactory::findAnimatedNodes( const aiScene* scene, map<string, aiBone*>& result )
 {
 	assert( scene );
 	assert( result.empty() );
@@ -84,32 +85,35 @@ void SkeletonFactory::findAnimatedNodes( const aiScene* scene, set<string>& resu
 			aiBone* bone = mesh->mBones[b];
 			assert( bone );
 
-			result.insert( string( bone->mName.data ) );
-			
+			result[bone->mName.data] = bone;	
 		}
 	}
 }
 
 
-void SkeletonFactory::flattenHierarchy( const aiNode* node, int parent, const set<string>& usedBones, vector<SkeletonNode>& result )
+void SkeletonFactory::flattenHierarchy( const aiNode* node, int parent, const map<string, aiBone*>& animatedNodes, vector<SkeletonNode>& result )
 {
 	if( !node )
 		return;
 
 	string nodeName = string( node->mName.data );
+	map<string, aiBone*>::const_iterator itBone = animatedNodes.find( nodeName );
+	bool isAnimated = itBone != animatedNodes.end();
+
 	SkeletonNode _n =
 	{
 		node,
+		isAnimated ? itBone->second : NULL,
 		parent,
 		nodeName,
-		usedBones.find( nodeName ) != usedBones.end()
+		isAnimated
 	};
 
 	result.push_back( _n );
 	parent = result.size()-1;
 
 	for( unsigned int i=0; i<node->mNumChildren; ++i )
-		flattenHierarchy( node->mChildren[i], parent, usedBones, result );
+		flattenHierarchy( node->mChildren[i], parent, animatedNodes, result );
 }
 
 void  SkeletonFactory::markParents( std::vector<SkeletonNode>& hierarchy )
@@ -134,6 +138,7 @@ void  SkeletonFactory::markParents( std::vector<SkeletonNode>& hierarchy )
 
 void SkeletonFactory::filterHierarchy( std::vector<SkeletonNode>& hierarchy, Skeleton& result )
 {
+	// TODO: combine nodes if possible
 	map<int, int> nodeMapping;
 	nodeMapping[-1] = -1;
 
@@ -142,7 +147,7 @@ void SkeletonFactory::filterHierarchy( std::vector<SkeletonNode>& hierarchy, Ske
 		SkeletonNode& n = hierarchy[i];
 		if( n.used )
 		{
-			result.addTransform(  nodeMapping[n.parent], n.node->mTransformation, n.name );
+			result.addTransform(  nodeMapping[n.parent], n.node->mTransformation, n.bone ? n.bone->mOffsetMatrix : aiMatrix4x4(), n.name );
 			nodeMapping[i] = result.getBoneCount()-1;
 		}
 	}
@@ -152,7 +157,7 @@ void SkeletonFactory::filterHierarchy( std::vector<SkeletonNode>& hierarchy, Ske
 Skeleton* SkeletonFactory::extractSkeleton( const aiScene* scene )
 {
 	// find animated nodes first
-	set<string> animatedNodes;
+	map<string, aiBone*> animatedNodes;
 	findAnimatedNodes( scene, animatedNodes );
 
 	// now flatten hierarchy into array and mark all animated nodes

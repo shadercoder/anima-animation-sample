@@ -21,6 +21,8 @@ class Model : public DisplayList::Node
 		int m_VertexSize;
 		int m_VertexCount;
 		int m_TriangleCount;
+
+		aiMesh* sourceMesh;
 	};
 
 	std::vector<Mesh> m_Meshes;

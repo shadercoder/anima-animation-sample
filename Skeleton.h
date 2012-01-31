@@ -1,25 +1,24 @@
 #pragma once
 
-#include <vector>
-#include <set>
-
-#include "aiTypes.h"
+#include "stdafx.h" 
 
 struct aiScene;
 struct aiNode;
+struct aiBone;
 class SkeletonFactory;
 
 class Skeleton
 {
 	std::vector<int> mParents;
 	std::vector<aiMatrix4x4> mTransforms;
+	std::vector<aiMatrix4x4> mBindingTransforms;
 	std::vector<std::string> mNodeNames;
 
 public:
 	Skeleton(void);
 	~Skeleton(void);
 
-	void addTransform( int parent, const aiMatrix4x4& transform, const std::string& name );
+	void addTransform( int parent, const aiMatrix4x4& transform, const aiMatrix4x4& bindingTransform, const std::string& name );
 
 	const aiMatrix4x4& getLocalTransform( int bone ) const;
 	aiMatrix4x4 getWorldTransform( int bone ) const;
@@ -39,13 +38,14 @@ class SkeletonFactory
 	struct SkeletonNode
 	{
 		const aiNode* node;
+		const aiBone* bone;
 		int parent;
 		std::string name;
 		bool used;
 	};
 
-	static void findAnimatedNodes( const aiScene* scene, std::set<std::string>& result );
-	static void flattenHierarchy( const aiNode* node, int parent, const std::set<std::string>& usedBones, std::vector<SkeletonNode>& result );
+	static void findAnimatedNodes( const aiScene* scene, std::map<std::string, aiBone*>& result );
+	static void flattenHierarchy( const aiNode* node, int parent, const std::map<std::string, aiBone*>& animatedNodes, std::vector<SkeletonNode>& result );
 	static void markParents( std::vector<SkeletonNode>& hierarchy );
 
 	static void filterHierarchy( std::vector<SkeletonNode>& hierarchy, Skeleton& result );

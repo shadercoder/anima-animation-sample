@@ -2,6 +2,7 @@
 #include <iostream>
 #include "RenderContext.h"
 #include "DxErr.h"
+#include "Debug.h"
 
 using namespace std;
 Model::Model( const std::string& fileName )
@@ -81,12 +82,15 @@ bool Model::load( RenderContext* context )
 		aiProcess_CalcTangentSpace       | 
 		aiProcess_Triangulate            |
 		aiProcess_JoinIdenticalVertices  |
+		aiProcess_MakeLeftHanded |
 		aiProcess_SortByPType);
 
 	// If the import failed, report it
 	if( !scene)
 	{
 		std::cout << importer.GetErrorString() << std::endl;
+		MessageBox( NULL,  importer.GetErrorString(), "import failed", MB_OK );
+
 		return false;
 	}
 
@@ -98,6 +102,7 @@ bool Model::load( RenderContext* context )
 		memset( &result, 0x0, sizeof(Mesh) );
 
 		aiMesh* importedMesh = scene->mMeshes[m];
+		result.sourceMesh = importedMesh;
 
 		// create data converters first
 		std::vector<DataConverter*> dataConverters;
@@ -118,10 +123,10 @@ bool Model::load( RenderContext* context )
 		// now create vertex buffer
 		{
 			const int vertexBufferSize = importedMesh->mNumVertices * result.m_VertexSize;
-			context->Device()->CreateVertexBuffer( vertexBufferSize, 0, 0, D3DPOOL_DEFAULT, &result.m_pVertexBuffer, NULL );
+			DX_CHECK( context->Device()->CreateVertexBuffer( vertexBufferSize, 0, 0, D3DPOOL_DEFAULT, &result.m_pVertexBuffer, NULL ) );
 
 			BYTE* vertexData;
-			result.m_pVertexBuffer->Lock( 0, 0, reinterpret_cast<void**>( &vertexData ), D3DLOCK_DISCARD );
+			DX_CHECK( result.m_pVertexBuffer->Lock( 0, 0, reinterpret_cast<void**>( &vertexData ), 0 ) );
 
 			BYTE* curOffset = reinterpret_cast<BYTE*>( vertexData );
 
@@ -141,10 +146,10 @@ bool Model::load( RenderContext* context )
 			const int indexSize = indexFormat==D3DFMT_INDEX16 ?  sizeof(UINT16) : sizeof(UINT32);
 
 			const int indexBufferSize = importedMesh->mNumFaces * 3 * indexSize;
-			context->Device()->CreateIndexBuffer( indexBufferSize, 0, indexFormat, D3DPOOL_DEFAULT, &result.m_pIndexBuffer, NULL );
+			DX_CHECK( context->Device()->CreateIndexBuffer( indexBufferSize, 0, indexFormat, D3DPOOL_DEFAULT, &result.m_pIndexBuffer, NULL ) );
 
 			BYTE* indexData;
-			result.m_pIndexBuffer->Lock( 0, 0, reinterpret_cast<void**>( &indexData ), D3DLOCK_DISCARD );
+			DX_CHECK( result.m_pIndexBuffer->Lock( 0, 0, reinterpret_cast<void**>( &indexData ), 0 ) );
 
 			for( unsigned int f=0; f<importedMesh->mNumFaces; ++f )
 			{
@@ -172,7 +177,7 @@ bool Model::load( RenderContext* context )
 				memcpy( indexData + f * 3 * indexSize, indices, 3*indexSize );
 			}
 
-			result.m_pIndexBuffer->Unlock();
+			DX_CHECK( result.m_pIndexBuffer->Unlock() );
 			result.m_TriangleCount = importedMesh->mNumFaces;
 
 		}
@@ -203,40 +208,57 @@ bool Model::load( RenderContext* context )
 
 void Model::Render( RenderContext* context )
 {
+	context->Device()->SetRenderState( D3DRS_ALPHABLENDENABLE, FALSE );
+	context->Device()->SetRenderState( D3DRS_ZWRITEENABLE, D3DZB_TRUE);
+	context->Device()->SetRenderState( D3DRS_ZENABLE, D3DZB_TRUE);
+
 	for( unsigned int m=0; m<m_Meshes.size(); ++m )
 	{
 		const Mesh& mesh = m_Meshes[m];
 		D3DXHANDLE hTechnique = mesh.m_pEffect->GetTechniqueByName( "Model" );
-		D3DXHANDLE hWorldViewProjection =mesh.m_pEffect->GetParameterBySemantic( NULL, "WORLDVIEWPROJECTION" );
-		D3DXHANDLE hLightDirection =mesh.m_pEffect->GetParameterBySemantic( NULL, "LIGHTDIRECTION" );
+		D3DXHANDLE hWorldViewProjection = mesh.m_pEffect->GetParameterBySemantic( NULL, "WORLDVIEWPROJECTION" );
+		D3DXHANDLE hLightDirection = mesh.m_pEffect->GetParameterBySemantic( NULL, "LIGHTDIRECTION" );
+		D3DXHANDLE hBoneTransforms = mesh.m_pEffect->GetParameterBySemantic( NULL, "BONETRANSFORMS" );
+		
+		DX_CHECK( context->Device()->SetVertexDeclaration( mesh.m_pVertexDeclaration ) );
+		DX_CHECK( context->Device()->SetStreamSource( 0, mesh.m_pVertexBuffer, 0, mesh.m_VertexSize ) );
+		DX_CHECK( context->Device()->SetIndices( mesh.m_pIndexBuffer ) );
 
-		context->Device()->SetVertexDeclaration( mesh.m_pVertexDeclaration );
-		context->Device()->SetStreamSource( 0, mesh.m_pVertexBuffer, 0, mesh.m_VertexSize );
-		context->Device()->SetIndices( mesh.m_pIndexBuffer );
-
-		mesh.m_pEffect->SetMatrix( hWorldViewProjection, &(context->GetViewMatrix() * context->GetProjectionMatrix()).data );
+		Math::Matrix worldViewProjection = context->GetViewMatrix() * context->GetProjectionMatrix();
+		DX_CHECK( mesh.m_pEffect->SetMatrix( hWorldViewProjection, &worldViewProjection.data ) );
 
 
 		D3DXVECTOR4 lightDirection = D3DXVECTOR4( 0, 1, 0, 1 );
-		mesh.m_pEffect->SetVector( hLightDirection, &lightDirection );
+		DX_CHECK( mesh.m_pEffect->SetVector( hLightDirection, &lightDirection ) );
 
-		mesh.m_pEffect->SetTechnique( hTechnique );
+		DX_CHECK( mesh.m_pEffect->SetTechnique( hTechnique ) );
 
 		UINT cPasses;
-		mesh.m_pEffect->Begin( &cPasses, 0 );
+		DX_CHECK( mesh.m_pEffect->Begin( &cPasses, 0 ) );
+
+
+		const int boneMatrixCount = 16;
+		D3DXMATRIX boneMatrices[boneMatrixCount];
+		for( int i=0; i<boneMatrixCount; ++i )
+		{
+			memcpy( boneMatrices[i], worldViewProjection.data, sizeof(D3DXMATRIX) );
+		}
+
+		DX_CHECK( mesh.m_pEffect->SetMatrixArray( hBoneTransforms, boneMatrices, boneMatrixCount ) );
+
 
 		for( unsigned int iPass = 0; iPass < cPasses; iPass++ )
 		{
-			mesh.m_pEffect->BeginPass( iPass );
+			DX_CHECK( mesh.m_pEffect->BeginPass( iPass ) );
 
-			HRESULT hr = context->Device()->DrawIndexedPrimitive( D3DPT_TRIANGLELIST, 0, 0, mesh.m_VertexCount, 0, mesh.m_TriangleCount );
+			DX_CHECK( context->Device()->DrawIndexedPrimitive( D3DPT_TRIANGLELIST, 0, 0, mesh.m_VertexCount, 0, mesh.m_TriangleCount ) );
 
-			mesh.m_pEffect->EndPass();
+			DX_CHECK( mesh.m_pEffect->EndPass() );
 		}
 
-		mesh.m_pEffect->End();
+		DX_CHECK( mesh.m_pEffect->End() );
 	}
 
-	context->Device()->SetStreamSource( 0, NULL, 0, 0 );
-	context->Device()->SetIndices( NULL );
+	DX_CHECK( context->Device()->SetStreamSource( 0, NULL, 0, 0 ) );
+	DX_CHECK( context->Device()->SetIndices( NULL ) );
 }

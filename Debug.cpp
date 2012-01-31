@@ -17,3 +17,18 @@ void DebugPrint( const TCHAR* szFormat, ...)
 
     OutputDebugString(szBuff);
 }
+
+void __DxCheckAndReportError( HRESULT hr, const char* file, int line )
+{
+	if( hr != S_OK )
+	{
+		const char* errorString = DXGetErrorString( hr );
+		const char* errorDescription = DXGetErrorDescription( hr );
+
+		char buffer[4096];
+		sprintf( buffer, "Error '%s': %s occured in %s, line %d", errorString, errorDescription, file, line );
+		MessageBox( NULL, "DirectX Error", buffer, MB_OK );
+
+		DebugPrint( "%s\n", buffer );
+	}
+}
