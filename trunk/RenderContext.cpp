@@ -24,12 +24,11 @@ RenderContext::RenderContext( HWND hWnd, int width, int height )
 {
 	m_hWnd = hWnd;
 
-#ifndef OPENGL
 	m_pD3D = Direct3DCreate9( D3D_SDK_VERSION );
 
     D3DDISPLAYMODE d3ddm;
 
-    m_pD3D->GetAdapterDisplayMode( D3DADAPTER_DEFAULT, &d3ddm );
+	DX_CHECK( m_pD3D->GetAdapterDisplayMode( D3DADAPTER_DEFAULT, &d3ddm ) );
 
     ZeroMemory( &m_PresentParameters, sizeof(m_PresentParameters) );
 
@@ -50,7 +49,7 @@ RenderContext::RenderContext( HWND hWnd, int width, int height )
 		{ 
 			D3DADAPTER_IDENTIFIER9  Identifier; 
 
-			m_pD3D->GetAdapterIdentifier(Adapter,0,&Identifier); 
+			DX_CHECK( m_pD3D->GetAdapterIdentifier(Adapter,0,&Identifier) ); 
 			if (strstr(Identifier.Description,"PerfHUD") != 0) 
 			{ 
 				AdapterToUse=Adapter; 
@@ -59,19 +58,8 @@ RenderContext::RenderContext( HWND hWnd, int width, int height )
 			} 
 		} 
  
-		m_pD3D->CreateDevice( AdapterToUse, DeviceType, hWnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &m_PresentParameters, &m_pDevice );
+		DX_CHECK( m_pD3D->CreateDevice( AdapterToUse, DeviceType, hWnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &m_PresentParameters, &m_pDevice ) );
 	}
-#else
-	m_cgContext  = cgCreateContext(); 
-	g_cgContext = m_cgContext;
-
-	cgGLRegisterStates(m_cgContext);
-	cgGLSetManageTextureParameters(m_cgContext, CG_TRUE);
-
-
-	cgSetErrorCallback(cgErrorCallback);
-
-#endif
 
 	m_ViewMatrix = Math::Matrix::LookAt( Math::Vector(0,0,-70), Math::Vector( 0, 0, 0 ), Math::Vector(0,1,0) );
 	m_ProjectionMatrix = Math::Matrix::Perspective( 45.0f, ((float)width)/height, 1.0f, 1000.0f );

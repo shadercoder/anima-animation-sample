@@ -137,6 +137,14 @@ struct aiSkinningConverter : public DataConverter
 		}
 	};
 
+	struct BoneIndexCompare
+	{
+		bool operator()(const VertexInfluence& x, const VertexInfluence& y)
+		{
+			return x.BoneIndex < y.BoneIndex;
+		}
+	};
+
 	struct BoneWeightAccumulate
 	{
 		float operator()( float value, const VertexInfluence& x )
@@ -172,6 +180,7 @@ struct aiSkinningConverter : public DataConverter
 			// only keep most significant weights
 			std::sort( influences.begin(), influences.end(), BoneWeightCompare() );
 			influences.resize( MAX_INFLUENCES_PER_VERTEX );
+			std::sort( influences.begin(), influences.end(), BoneIndexCompare() );
 
 			// renormalize weights
 			float totalWeight = std::accumulate( influences.begin(), influences.end(), 0.f,BoneWeightAccumulate() );
@@ -209,6 +218,6 @@ struct aiSkinningConverter : public DataConverter
 		}
 			
 		memcpy( destination + m_Offset, boneIndices, IndicesSize() );
-		memcpy( destination + m_Offset + IndicesSize(), boneIndices, WeightsSize() );
+		memcpy( destination + m_Offset + IndicesSize(), boneWeights, WeightsSize() );
 	}
 };
