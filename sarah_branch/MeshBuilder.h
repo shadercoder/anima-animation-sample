@@ -1,26 +1,21 @@
 #pragma once
 #include "stdafx.h"
-#include "Model.h"
+#include "SkeletalModel.h"
+#include "MeshBuilderBase.h"
 
 class SkeletonBuilder;
 class DataConverter;
 
-class MeshBuilder
+class MeshBuilder : public MeshBuilderBase
 {
 	const SkeletonBuilder& mSkeletonBuilder;
-	const aiScene* mScene;
 
-	typedef std::map<const aiMesh*, std::vector<DataConverter*> > ConverterMap;
-	ConverterMap mDataConverters;
-
-	void CreateDataConverters( ConverterMap& result ) const;
-	int  GetVertexSize( const aiMesh* mesh ) const;
-	void ReadTexture( std::vector<BYTE>& result, const char* fileName );
+	virtual void CreateDataConverters( MeshBuilderBase::ConverterMap& result ) const;
 
 public:
 	MeshBuilder( const aiScene* scene, const SkeletonBuilder& skeletonBuilder );
 	~MeshBuilder();
 
-	void BuildMeshes( std::vector<SkeletalModel::Mesh>& meshes );
+	virtual void BuildMeshes( std::vector<SkeletalModel::Mesh>& meshes );
 };
 

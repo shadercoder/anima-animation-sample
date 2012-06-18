@@ -12,7 +12,9 @@
 #include <assert.h>
 #include <Shellapi.h>
 #include "TestEnvironment.h"
-#include "Model.h"
+#include "SkeletalModel.h"
+#include "ModelBase.h"
+//#include "Test.h"
 #include "Input.h"
 
 
@@ -72,11 +74,16 @@ AnimaApplication::~AnimaApplication()
 		mUserInterface->ReleaseResources( mRenderContext );
 		delete mUserInterface;
 		
-		mModel->ReleaseResources( mRenderContext );
+		if( mModel )
+			mModel->ReleaseResources( mRenderContext );
 		delete mModel;
 
 		delete mFramerateCounter;
 		delete mRenderContext;
+
+		if( mSkydomeModel )
+			mSkydomeModel->ReleaseResources( mRenderContext );
+		delete mSkydomeModel;
 	}
 }
 
@@ -160,10 +167,21 @@ HRESULT AnimaApplication::CreateInstance( HINSTANCE hInstance, HINSTANCE hPrevIn
 	Instance()->mCamera = new Camera( *Instance()->mInput, *Instance()->mRenderContext );
 	// set up renderer 
 
-	Instance()->mModel = new SkeletalModel( "..\\Models\\frank.dae" );
-	Instance()->mModel->Load( Instance()->mRenderContext );
-	Instance()->mModel->SetNext( Instance()->mUserInterface );
-	Instance()->mModel->PlayAnimation( 0, 0.25f );
+	//Instance()->mTest = new Test( mInstance->mRenderContext );
+	//Instance()->mTest->AcquireResources( Instance()->mRenderContext );
+
+	Instance()->mSkydomeModel = new ModelBase( "..\\Models\\skydome.dae" );
+	Instance()->mSkydomeModel->setTextureFile( "..\\Textures\\sky.png" );
+	//Instance()->mSkydomeModel->setShaderFile( "..\\Shaders\\Model.fx" );
+	Instance()->mSkydomeModel->Load( Instance()->mRenderContext );
+	//Instance()->mSkydomeModel->SetNext( Instance()->mTest );
+
+	Instance()->mModel = NULL;
+	//Instance()->mModel = new SkeletalModel( "..\\Models\\frank.dae" );
+	//Instance()->mModel->setShaderFile( "..\\Shaders\\Model.fx" );
+	//Instance()->mModel->Load( Instance()->mRenderContext );
+	//Instance()->mModel->SetNext( Instance()->mSkydomeModel );
+	//Instance()->mModel->PlayAnimation( 0, 0.25f );
 
 	Instance()->mModelRotationAngle = 0.f;
 	Instance()->mRotateModel = true;
@@ -178,7 +196,6 @@ void AnimaApplication::DestroyInstance()
 	delete AnimaApplication::mInstance;
 	AnimaApplication::mInstance = 0;
 }
-
 
 void AnimaApplication::Run()
 {
@@ -212,14 +229,16 @@ void AnimaApplication::NextFrame()
 	mFramerateCounter->FrameStart();
 
 	mCamera->update( mDeltaTime.Elapsed() );
-	mModel->Update( mDeltaTime.Elapsed() );
+
+	if( mModel )
+		mModel->Update( mDeltaTime.Elapsed() );
 
 	mRenderContext->SetViewMatrix( mCamera->ViewMatrix() );
-	mRenderContext->RenderFrame( mModel );
+	mRenderContext->RenderFrame( mSkydomeModel );
 
 	mFramerateCounter->FrameEnd();
 	
-	if( mRotateModel )
+	/*if( mRotateModel )
 	{
 		mModelRotationAngle += 0.00025f; 
 		
@@ -228,7 +247,7 @@ void AnimaApplication::NextFrame()
 
 		mModelRotation = rotateUpright*rotateY;
 		mModel->SetRoot( aiVector3D(0.f, 0.f, 0.f ), mModelRotation );
-	}
+	}*/
 
 	++mFrameCounter;
 }
@@ -311,12 +330,14 @@ LRESULT AnimaApplication::OnMessage( HWND hWnd, UINT msg, WPARAM wParam, LPARAM 
 void AnimaApplication::OnDeviceLost()
 {
 	mModel->ReleaseResources( mRenderContext ); 
+	mSkydomeModel->ReleaseResources( mRenderContext );
 	mUserInterface->ReleaseResources( mRenderContext );
 }
 
 void AnimaApplication::OnDeviceReset()
 {
-	mModel->AcquireResources( mRenderContext ); 
+	mModel->AcquireResources( mRenderContext );
+	mSkydomeModel->AcquireResources( mRenderContext );
 	mUserInterface->AcquireResources( mRenderContext );
 }
 

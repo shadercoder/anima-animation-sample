@@ -1,7 +1,7 @@
 #pragma once
 #include "stdafx.h"
 #include <string>
-#include "DisplayList.h"
+#include "ModelBase.h"
 #include "Skeleton.h"
 #include "DataConverters.h"
 #include "Animation.h"
@@ -10,7 +10,7 @@ class SkeletonBuilder;
 class MeshBuilder;
 struct aiScene;
 
-class SkeletalModel : public DisplayList::Node, Serialization::StreamSerializable
+class SkeletalModel : public ModelBase
 {
 	friend class MeshBuilder;
 
@@ -18,7 +18,6 @@ class SkeletalModel : public DisplayList::Node, Serialization::StreamSerializabl
 	{
 		SAM_LINEAR_BLEND_SKINNING,
 		SAM_DUAL_QUATERNION,
-
 		SAM_COUNT,
 	};
 
@@ -80,7 +79,6 @@ class SkeletalModel : public DisplayList::Node, Serialization::StreamSerializabl
 	int mCurrentAnimation;
 	bool mAnimationPaused;
 
-	int mShaderTest;
 	SkeletalAnimationMethod mCurrentAnimationMethod;
 
 	int CreateDataConverters( aiMesh* mesh, SkeletonBuilder* skeletonBuilder, std::vector<DataConverter*>& result );
@@ -89,9 +87,12 @@ public:
 	SkeletalModel( const std::string& fileName );
 	~SkeletalModel(void);
 
-	bool Load( RenderContext* context );
-	void AcquireResources( RenderContext* context );
-	void ReleaseResources( RenderContext* context );
+	virtual bool Load( RenderContext* context );
+	virtual void AcquireResources( RenderContext* context );
+	virtual void ReleaseResources( RenderContext* context );
+
+	virtual void loadTextures( RenderContext* context, Mesh& mesh );
+	virtual void loadShaders( RenderContext* context, Mesh& mesh );
 
 	virtual bool ToStream( std::ostream& stream );
 	virtual bool FromStream( std::istream& stream );
@@ -104,10 +105,7 @@ public:
 	int ToggleShaderTest();
 	int ToggleAnimationMethod();
 
-	void Render( RenderContext* context );
+	virtual void Render( RenderContext* context );
 	void Update( float dt );
-
-	bool mIsLoaded;
-	std::string mFileName;
 };
 

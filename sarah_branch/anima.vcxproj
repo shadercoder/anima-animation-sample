@@ -20,9 +20,11 @@
     <ClCompile Include="Input.cpp" />
     <ClCompile Include="math.cpp" />
     <ClCompile Include="MeshBuilder.cpp" />
-    <ClCompile Include="Model.cpp" />
+    <ClCompile Include="MeshBuilderBase.cpp" />
+    <ClCompile Include="ModelBase.cpp" />
     <ClCompile Include="PoseBuffer.cpp" />
     <ClCompile Include="RenderContext.cpp" />
+    <ClCompile Include="SkeletalModel.cpp" />
     <ClCompile Include="Skeleton.cpp" />
     <ClCompile Include="SkeletonBuilder.cpp" />
     <ClCompile Include="stdafx.cpp" />
@@ -41,7 +43,8 @@
     <ClInclude Include="Input.h" />
     <ClInclude Include="math.h" />
     <ClInclude Include="MeshBuilder.h" />
-    <ClInclude Include="Model.h" />
+    <ClInclude Include="MeshBuilderBase.h" />
+    <ClInclude Include="ModelBase.h" />
     <ClInclude Include="PoseBuffer.h" />
     <ClInclude Include="RenderContext.h" />
     <ClInclude Include="Resource.h" />
@@ -54,6 +57,7 @@
     <ClInclude Include="Shaders\Quaternion.h" />
     <ClInclude Include="Shaders\Skinning.h" />
     <ClInclude Include="Shaders\TangentFrame.h" />
+    <ClInclude Include="SkeletalModel.h" />
     <ClInclude Include="Skeleton.h" />
     <ClInclude Include="SkeletonBuilder.h" />
     <ClInclude Include="stdafx.h" />

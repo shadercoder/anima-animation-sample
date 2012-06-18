@@ -66,7 +66,10 @@ public:
 
 	virtual void SetLocalTransform( int bone,  const Math::Vector& translation, const Math::Quaternion& rotation, const Math::Vector& scale )
 	{
-		mTransforms[bone] = BoneTransform( translation, rotation, scale );	
+		if (bone < mTransforms.size())
+		{
+			mTransforms[bone] = BoneTransform( translation, rotation, scale );
+		}
 	}
 
 
@@ -86,7 +89,10 @@ public:
 			p = mParents[p];
 		}
 	
-		memcpy( poseBuffer[bone], &result, sizeof(BoneTransform) );
+		if( poseBuffer[bone] )
+		{
+			memcpy( poseBuffer[bone], &result, sizeof(BoneTransform) );
+		}
 	}
 
 	bool ToStream( std::ostream& stream )

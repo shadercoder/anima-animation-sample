@@ -1,16 +1,41 @@
-#include "MeshBuilder.h"
+#include "MeshBuilderBase.h"
+#include "DataConverters.h"
 
-MeshBuilder:: MeshBuilder( const aiScene* scene, const SkeletonBuilder& skeletonBuilder )
-	: MeshBuilderBase( scene )
-	, mSkeletonBuilder( skeletonBuilder )
+MeshBuilderBase::MeshBuilderBase( const aiScene* scene )
+	: mScene( scene )
 {
+	CreateDataConverters( mDataConverters );
 }
 
-MeshBuilder::~MeshBuilder(void)
+
+MeshBuilderBase::~MeshBuilderBase(void)
 {
+	// delete data converters again
+	for( ConverterMap::iterator it = mDataConverters.begin(); it != mDataConverters.end(); ++it )
+	{
+		std::vector<DataConverter*>& converters = it->second;
+		for( unsigned int i=0; i<converters.size(); ++i )
+			delete converters[i];
+		converters.clear();
+	}
 }
 
-void MeshBuilder::CreateDataConverters( ConverterMap& result ) const
+int  MeshBuilderBase::GetVertexSize( const aiMesh* mesh ) const
+{
+	int vertexSize = 0;
+
+	ConverterMap::const_iterator it = mDataConverters.find( mesh );
+	if( it != mDataConverters.end() )
+	{
+		const std::vector<DataConverter*>& converters = it->second;
+		for( unsigned int c=0; c<converters.size(); ++c )
+			vertexSize += converters[c]->Size();
+
+	}
+	return vertexSize;
+}
+
+void MeshBuilderBase::CreateDataConverters( ConverterMap& result ) const
 {
 	for( unsigned int m=0; m<mScene->mNumMeshes; ++m )
 	{
@@ -34,8 +59,8 @@ void MeshBuilder::CreateDataConverters( ConverterMap& result ) const
 				converters.push_back( new TangentFrameToQTangentConverter( D3DDECLUSAGE_NORMAL, 0, offset, mesh->mNormals, mesh->mTangents, mesh->mBitangents, vertexCount ) );
 				offset += converters.back()->Size();
 
-				// add uncompressed tangent space for reference in debug mode
-#ifdef DEBUG
+				// add uncompressed tangent space for reference
+				if( false )
 				{
 					converters.push_back( new aiVector3DConverter( D3DDECLUSAGE_TEXCOORD, 5, offset, mesh->mNormals, vertexCount ) );
 					offset += converters.back()->Size();
@@ -46,7 +71,6 @@ void MeshBuilder::CreateDataConverters( ConverterMap& result ) const
 					converters.push_back( new aiVector3DConverter( D3DDECLUSAGE_TEXCOORD, 7, offset, mesh->mBitangents, vertexCount ) );
 					offset += converters.back()->Size();
 				}
-#endif
 			}
 			else
 			{
@@ -72,30 +96,43 @@ void MeshBuilder::CreateDataConverters( ConverterMap& result ) const
 			offset += converters.back()->Size();
 		}
 
-		if( mesh->HasBones() )
+		/*if( mesh->HasBones() )
 		{
 			converters.push_back( new aiSkinningConverter( offset, mesh->mBones, mesh->mNumBones, mSkeletonBuilder ) );
 			offset += converters.back()->Size();
-		}
+		}*/
 
 		result[mesh] = converters;
 	}
 }
 
-void MeshBuilder::BuildMeshes( std::vector<SkeletalModel::Mesh>& meshes )
+void MeshBuilderBase::ReadTexture( std::vector<BYTE>& result, const char* fileName )
+{
+	std::ifstream textureStream;
+	textureStream.open( fileName, std::ios::binary );
+
+	textureStream.seekg (0, std::ios::end);
+	const unsigned int numBytes = static_cast<const unsigned int>( textureStream.tellg() );
+	textureStream.seekg( 0, std::ios::beg );
+
+	result.resize( numBytes );
+	textureStream.read( reinterpret_cast<char*>( &result[0] ), numBytes );
+	textureStream.close();
+}
+
+void MeshBuilderBase::BuildMeshes( std::vector<ModelBase::Mesh>& meshes, const std::string& textureFileName )
 {
 	for( unsigned int m=0; m<mScene->mNumMeshes; ++m )
 	{
 		aiMesh* mesh = mScene->mMeshes[m];
-		meshes.push_back( SkeletalModel::Mesh() );
+		meshes.push_back( ModelBase::Mesh() );
 
-		SkeletalModel::MeshData& meshData = meshes.back().Data;
+		ModelBase::MeshData& meshData = meshes.back().Data;
 
 		// find out vertex size first
 		std::vector<DataConverter*>& converters = mDataConverters[mesh];
 		meshData.mVertexSize = GetVertexSize( mesh );
 		
-
 		// build vertex declaration
 		{
 			for( unsigned int i=0; i<converters.size(); ++i )
@@ -155,10 +192,11 @@ void MeshBuilder::BuildMeshes( std::vector<SkeletalModel::Mesh>& meshes )
 			meshData.mTriangleCount = mesh->mNumFaces;
 		}
 
-		// read textures
+		// read texture
 		{
-			ReadTexture( meshData.mAlbedoMap, "..\\Textures\\sky.png" );
-			ReadTexture( meshData.mNormalMap, "..\\Textures\\sky.png" );
+			//ReadTexture( meshData.mAlbedoMap, "..\\Textures\\frank_D.jpg" );
+			ReadTexture( meshData.mNormalMap, textureFileName.c_str() );
 		}
 	}
 }
+

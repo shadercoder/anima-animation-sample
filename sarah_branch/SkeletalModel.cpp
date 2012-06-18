@@ -1,4 +1,4 @@
-#include "Model.h"
+#include "SkeletalModel.h"
 #include <iostream>
 #include "RenderContext.h"
 #include "DxErr.h"
@@ -46,10 +46,8 @@ bool SkeletalModel::MeshData::FromStream( std::istream& stream )
 }
 
 SkeletalModel::SkeletalModel( const std::string& fileName )
-	: mFileName( fileName )
-	, mIsLoaded( false )
+	: ModelBase( fileName )
 	, mCurrentAnimation( NULL )
-	, mShaderTest( 0 )
 	, mCurrentAnimationMethod( SAM_LINEAR_BLEND_SKINNING )
 {
 	mSkeletons[SAM_LINEAR_BLEND_SKINNING] = new SkeletonGeneric<Math::Matrix3x4>();
@@ -74,7 +72,6 @@ void SkeletalModel::AcquireResources( RenderContext* context )
 {
 	for( unsigned int m=0; m<mMeshes.size(); ++m )
 	{
-		
 		Mesh& mesh = mMeshes[m];
 		context->Device()->CreateVertexDeclaration( &mesh.Data.mVertexElements[0], &mesh.mVertexDeclaration );
 
@@ -102,79 +99,67 @@ void SkeletalModel::AcquireResources( RenderContext* context )
 		}
 
 		// load textures
-		{
-			DWORD albedoMapFilter = D3DX_FILTER_TRIANGLE | D3DX_FILTER_DITHER | D3DX_FILTER_SRGB_IN | D3DX_FILTER_SRGB_OUT;
-			DWORD normalMapFilter = D3DX_FILTER_LINEAR;
-
-			DX_CHECK( D3DXCreateTextureFromFileInMemoryEx( context->Device(), &mesh.Data.mAlbedoMap[0], mesh.Data.mAlbedoMap.size(), 
-				D3DX_DEFAULT, D3DX_DEFAULT, D3DX_DEFAULT, 0, D3DFMT_FROM_FILE, D3DPOOL_DEFAULT, albedoMapFilter,
-				D3DX_DEFAULT, 0, NULL, NULL, &mesh.mDiffuseMap ) );
-
-			DX_CHECK( D3DXCreateTextureFromFileInMemoryEx( context->Device(), &mesh.Data.mNormalMap[0], mesh.Data.mNormalMap.size(), 
-				D3DX_DEFAULT, D3DX_DEFAULT, D3DX_DEFAULT, 0, D3DFMT_FROM_FILE, D3DPOOL_DEFAULT, normalMapFilter,
-				D3DX_DEFAULT, 0, NULL, NULL, &mesh.mNormalMap ) );
-		}
+		loadTextures( context, mesh );
 
 		// load shaders
+		loadShaders( context, mesh );
+	}
+}
+
+void SkeletalModel::loadTextures( RenderContext* context, Mesh& mesh )
+{
+	DWORD albedoMapFilter = D3DX_FILTER_TRIANGLE | D3DX_FILTER_DITHER | D3DX_FILTER_SRGB_IN | D3DX_FILTER_SRGB_OUT;
+	DWORD normalMapFilter = D3DX_FILTER_LINEAR;
+
+	DX_CHECK( D3DXCreateTextureFromFileInMemoryEx( context->Device(), &mesh.Data.mAlbedoMap[0], mesh.Data.mAlbedoMap.size(), 
+		D3DX_DEFAULT, D3DX_DEFAULT, D3DX_DEFAULT, 0, D3DFMT_FROM_FILE, D3DPOOL_DEFAULT, albedoMapFilter,
+		D3DX_DEFAULT, 0, NULL, NULL, &mesh.mDiffuseMap ) );
+
+	DX_CHECK( D3DXCreateTextureFromFileInMemoryEx( context->Device(), &mesh.Data.mNormalMap[0], mesh.Data.mNormalMap.size(), 
+		D3DX_DEFAULT, D3DX_DEFAULT, D3DX_DEFAULT, 0, D3DFMT_FROM_FILE, D3DPOOL_DEFAULT, normalMapFilter,
+		D3DX_DEFAULT, 0, NULL, NULL, &mesh.mNormalMap ) );
+}
+
+void SkeletalModel::loadShaders( RenderContext* context, Mesh& mesh )
+{
+	unsigned int maxFloats = 0;
+	for( unsigned int m=0; m<SAM_COUNT; ++m )
+		maxFloats = max( maxFloats, mPoseBuffers[m]->Size() / sizeof(float) );
+
+	char maxFloats4s[8];
+	sprintf_s( maxFloats4s, sizeof(maxFloats4s), "%d", maxFloats / 4 );
+	D3DXMACRO macros[] = { { "MAX_FLOAT_VECTORS_PER_MESH", maxFloats4s }, NULL };
+
+	LPD3DXBUFFER buf;			
+	HRESULT hr = D3DXCreateEffectFromFile( context->Device(), "..//Shaders//Model.fx", macros, NULL, NULL, NULL, &mesh.mEffect, &buf );
+
+	if( FAILED(hr) && buf)
+	{
+		const char* text = reinterpret_cast<char*>( buf->GetBufferPointer() );
+		DXTRACE_ERR( text, hr );
+		buf->Release();
+	}
+	else 
+	{
+		// set static shader parameters
+		D3DXHANDLE hDiffuseMap = mesh.mEffect->GetParameterBySemantic( NULL, "DIFFUSE_MAP" );
+		DX_CHECK( mesh.mEffect->SetTexture( hDiffuseMap, mesh.mDiffuseMap ) );
+
+		D3DXHANDLE hNormalMap = mesh.mEffect->GetParameterBySemantic( NULL, "NORMAL_MAP" );
+		DX_CHECK( mesh.mEffect->SetTexture( hNormalMap, mesh.mNormalMap ) );
+
+		D3DXHANDLE hLightDirection = mesh.mEffect->GetParameterBySemantic( NULL, "LIGHTDIRECTION" );
+		D3DXVECTOR4 lightDirection = Math::Vector( 0.5, 1, 0 ).Normal();
+		DX_CHECK( mesh.mEffect->SetVector( hLightDirection, &lightDirection ) );
+
+		// store handles for dynamic shader parameters
+		mesh.EffectParameters.mViewProjection = mesh.mEffect->GetParameterBySemantic( NULL, "VIEWPROJECTION" );
+		mesh.EffectParameters.mBoneTransforms = mesh.mEffect->GetParameterBySemantic( NULL, "BONE_TRANSFORMS" );
+		mesh.EffectParameters.mShaderTest = mesh.mEffect->GetParameterBySemantic( NULL, "SHADER_TEST" );
+
+		for( int t=0; t<SAM_COUNT; ++t )
 		{
-			unsigned int maxFloats = 0;
-			for( unsigned int m=0; m<SAM_COUNT; ++m )
-				maxFloats = max( maxFloats, mPoseBuffers[m]->Size() / sizeof(float) );
-
-			char maxFloats4s[8];
-			sprintf_s( maxFloats4s, sizeof(maxFloats4s), "%d", maxFloats / 4 );
-			D3DXMACRO macros[] =
-			{ 
-				{ "MAX_SKINNING_VECTORS", maxFloats4s },
-#ifdef DEBUG
-				{ "DEBUG", "1" },
-#endif
-				NULL 
-			};
-
-			LPD3DXBUFFER buf;	
-			const char* shaderName = "../Shaders/Model.fx";
-			HRESULT hr = D3DXCreateEffectFromFile( context->Device(), shaderName, macros, NULL, NULL, NULL, &mesh.mEffect, &buf );
-
-			if( FAILED(hr) && buf)
-			{
-				const char* errorText = reinterpret_cast<char*>( buf->GetBufferPointer() );
-				char errorTitle[1024];
-				sprintf_s( errorTitle, "Error compiling shader '%s'", shaderName );
-				
-#ifdef DEBUG
-				// TODO: replace DXTRACE_ERR with vs console print so double clicking on file/line of error opens correct file
-				DXTRACE_ERR(errorText, hr );
-				__debugbreak();
-#else
-				MessageBox( NULL, errorText, errorTitle, MB_OK );
-				
-#endif
-				buf->Release();
-			}
-			else 
-			{
-				// set static shader parameters
-				D3DXHANDLE hDiffuseMap = mesh.mEffect->GetParameterBySemantic( NULL, "DIFFUSE_MAP" );
-				DX_CHECK( mesh.mEffect->SetTexture( hDiffuseMap, mesh.mDiffuseMap ) );
-
-				D3DXHANDLE hNormalMap = mesh.mEffect->GetParameterBySemantic( NULL, "NORMAL_MAP" );
-				DX_CHECK( mesh.mEffect->SetTexture( hNormalMap, mesh.mNormalMap ) );
-
-				D3DXHANDLE hLightDirection = mesh.mEffect->GetParameterBySemantic( NULL, "LIGHTDIRECTION" );
-				D3DXVECTOR4 lightDirection = Math::Vector( 0.5, 1, 0 ).Normal();
-				DX_CHECK( mesh.mEffect->SetVector( hLightDirection, &lightDirection ) );
-
-				// store handles for dynamic shader parameters
-				mesh.EffectParameters.mViewProjection = mesh.mEffect->GetParameterBySemantic( NULL, "VIEWPROJECTION" );
-				mesh.EffectParameters.mBoneTransforms = mesh.mEffect->GetParameterBySemantic( NULL, "BONE_TRANSFORMS" );
-				mesh.EffectParameters.mShaderTest = mesh.mEffect->GetParameterBySemantic( NULL, "SHADER_TEST" );
-
-				for( int t=0; t<SAM_COUNT; ++t )
-				{
-					mesh.EffectParameters.mTechniques[t] = mesh.mEffect->GetTechniqueByName( mSkeletons[t]->GetShaderTechnique() );
-				}
-			}
+			mesh.EffectParameters.mTechniques[t] = mesh.mEffect->GetTechniqueByName( mSkeletons[t]->GetShaderTechnique() );
 		}
 	}
 }
@@ -187,58 +172,12 @@ void SkeletalModel::ReleaseResources( RenderContext* context )
 		delete mPoseBuffers[m];
 	}
 
-	for( unsigned int m=0; m<mMeshes.size(); ++m )
-	{
-		Mesh& mesh = mMeshes[m];
-
-		if( mesh.mEffect )
-		{
-			mesh.mEffect->Release();
-			mesh.mEffect = NULL;
-		}
-
-		if( mesh.mIndexBuffer )
-		{
-			mesh.mIndexBuffer->Release();
-			mesh.mIndexBuffer = NULL;
-		}
-
-		if( mesh.mVertexBuffer )
-		{
-			mesh.mVertexBuffer->Release();
-			mesh.mVertexBuffer = NULL;
-		}
-
-		if( mesh.mVertexDeclaration )
-		{
-			mesh.mVertexDeclaration->Release();
-			mesh.mVertexDeclaration = NULL;
-		}
-
-		if( mesh.mDiffuseMap )
-		{
-			mesh.mDiffuseMap->Release();
-			mesh.mDiffuseMap = NULL;
-		}
-
-		if( mesh.mNormalMap )
-		{
-			mesh.mNormalMap->Release();
-			mesh.mNormalMap = NULL;
-		}
-	}
+	ModelBase::ReleaseResources( context );
 }
 
 bool SkeletalModel::Load( RenderContext* context )
 {
-
-	std::string binFileName = mFileName + 
-#ifdef DEBUG
-		".debug.bin";
-#else
-		".bin";
-#endif
-
+	std::string binFileName = mFileName + ".bin";
 	ifstream binFileReader( binFileName, std::ios::binary );
 	bool success = false;
 
@@ -247,6 +186,7 @@ bool SkeletalModel::Load( RenderContext* context )
 		success = FromStream( binFileReader );
 		binFileReader.close();
 	}
+	
 	if( !success )
 	{
 		// Create an instance of the Importer class
@@ -284,6 +224,7 @@ bool SkeletalModel::Load( RenderContext* context )
 			animationBuilder.BuildAnimations( mAnimations );
 			meshBuilder.BuildMeshes( mMeshes );
 		}
+
 		// save data to bin file
 		{
 			std::ofstream binFileWriter( binFileName, std::ios::binary );
@@ -386,7 +327,6 @@ void SkeletalModel::Render( RenderContext* context )
 	context->Device()->SetRenderState( D3DRS_SRGBWRITEENABLE, FALSE );
 	DX_CHECK( context->Device()->SetStreamSource( 0, NULL, 0, 0 ) );
 	DX_CHECK( context->Device()->SetIndices( NULL ) );
-
 }
 
 void SkeletalModel::Update( float dt )
@@ -396,13 +336,16 @@ void SkeletalModel::Update( float dt )
 
 	if( mCurrentAnimation >= 0 )
 	{
-		// evaluate animation and pose even when animation is paused, in order to get consistent timing
-		mAnimations[mCurrentAnimation].Update( mAnimationPaused ? 0 : dt );
-		mAnimations[mCurrentAnimation].EvaluatePose( skeleton );
-
-		for( int i=0; i<skeleton.GetBoneCount(); ++i )
+		if (mAnimations.size() > 0)
 		{
-			skeleton.GetWorldTransform( i, poseBuffer );
+			// evaluate animation and pose even when animation is paused, in order to get consistent timing
+			mAnimations[mCurrentAnimation].Update( mAnimationPaused ? 0 : dt );
+			mAnimations[mCurrentAnimation].EvaluatePose( skeleton );
+
+			for( int i=0; i<skeleton.GetBoneCount(); ++i )
+			{
+				skeleton.GetWorldTransform( i, poseBuffer );
+			}
 		}
 	}
 }

@@ -10,6 +10,7 @@ class CubeRendererInterface;
 class UserInterface;
 class Camera;
 class Input;
+class ModelBase;
 class SkeletalModel;
 
 /*	The main application class (Singleton)
@@ -27,6 +28,7 @@ class AnimaApplication
 	Camera* mCamera;
 	Input* mInput;
 	SkeletalModel* mModel;
+	ModelBase* mSkydomeModel;
 
 	WNDCLASSEX mWindowClass;
 	HWND mWindowHandle;
